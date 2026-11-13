@@ -157,6 +157,29 @@ Optional values, defaults, fallbacks and cross-field logic are plain Zod (`.opti
 
 ---
 
+## 🤖 AI Agent Skills
+
+This package ships [Agent Skills](https://agentskills.io) that teach AI coding agents (Claude Code, Cursor, Codex, …) how to use Xcrap correctly. They live in [`skills/`](./skills) and are included in the npm package:
+
+| Skill | What it covers |
+| --- | --- |
+| [`xcrap`](./skills/xcrap/SKILL.md) | How to use the framework: clients, extraction models (HTML, JSON, Markdown, XML), Zod transformation, pagination, batching. Detailed references in [`skills/xcrap/references`](./skills/xcrap/references). |
+| [`xcrap-best-practices`](./skills/xcrap-best-practices/SKILL.md) | Conventions, project layout, resilient selectors, testing with fixtures, debugging checklist and common mistakes. |
+
+Install them with the [`skills`](https://github.com/vercel-labs/skills) CLI:
+
+```bash
+npx skills add Xcrap-Cloud/xcrap
+```
+
+Or copy them from `node_modules` into your agent's skills folder, for example for Claude Code:
+
+```bash
+cp -r node_modules/xcrap/skills/* .claude/skills/
+```
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Whether it's fixing bugs, improving documentation, or adding new features.
