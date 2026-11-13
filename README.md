@@ -1,44 +1,32 @@
 # 🕷️ xcrap
 
-**xcrap** is a powerful and flexible web scraping framework for Node.js. It bundles the best-in-class tools for data extraction and transformation into a single, easy-to-use package.
-
-With **xcrap**, you can extract data from HTML, JSON, and Markdown using declarative models, and then clean, validate, and transform that data using a robust pipeline system.
+**xcrap** is a web scraping framework for Node.js. This package bundles the basic Xcrap packages into a single install, so you can extract data from HTML, JSON, Markdown and XML with declarative models and then clean and validate it with [Zod](https://zod.dev) schemas.
 
 ---
 
 ## 📦 Installation
 
-Install `xcrap` using your preferred package manager:
-
 ```bash
 npm install xcrap
 ```
 
-Or with yarn/pnpm:
+Everything below comes with it, no extra installs needed:
 
-```bash
-yarn add xcrap
-pnpm add xcrap
-```
+| Import | Bundles | What it is for |
+| --- | --- | --- |
+| `xcrap/core` | [`@xcrap/core`](https://www.npmjs.com/package/@xcrap/core) | `HttpClient`, `BaseClient`, `Randomizer`, `Rotator`, proxy and pagination support |
+| `xcrap/extractor` | [`@xcrap/extractor`](https://www.npmjs.com/package/@xcrap/extractor) + [`@xcrap/xml-extractor`](https://www.npmjs.com/package/@xcrap/xml-extractor) | Declarative extraction from HTML, JSON, Markdown and XML |
+| `xcrap/transformer` | [`@xcrap/transformer`](https://www.npmjs.com/package/@xcrap/transformer) + [`zod`](https://www.npmjs.com/package/zod) | Ready-made Zod schemas for scraped data, plus `z` itself |
 
----
-
-## 🚀 Features
-
-- **Declarative Extraction**: Extract data from HTML, JSON, and Markdown using simple, readable models (`@xcrap/extractor`).
-- **Data Transformation**: Clean, validate, and transform your extracted data with a powerful pipeline (`@xcrap/transformer`).
-- **Modular Design**: Built on top of a solid core (`@xcrap/core`) for reliability and extensibility.
-- **Type-Safe**: Written in TypeScript with full type definitions included.
+HTTP clients (`@xcrap/axios-client`, `@xcrap/puppeteer-client`, …) are separate packages; install the one you need.
 
 ---
 
 ## 📚 Quick Start
 
-Here's a complete example showing how to extract data from an HTML string and then transform it into a clean, structured format.
-
 ### 1. Extraction
 
-First, let's extract raw data from an HTML source using `HtmlParser` and `HtmlExtractionModel`.
+Extract raw data from an HTML source using `HtmlParser` and `HtmlExtractionModel`.
 
 ```typescript
 import { HtmlParser, HtmlExtractionModel, css, extract } from "xcrap/extractor"
@@ -48,118 +36,124 @@ const html = `
   <body>
     <div class="product">
       <h1 id="title">  Cool Gadget  </h1>
-      <span class="price">$99.99</span>
-      <div class="details">
-        <span data-spec="weight">250g</span>
-        <a href="/specs.pdf">Download Specs</a>
-      </div>
+      <span class="price">$1,099.99</span>
+      <span class="stock">In stock</span>
+      <a href="/specs.pdf">Download Specs</a>
     </div>
   </body>
 </html>
 `
 
-// Define the extraction model
 const extractionModel = new HtmlExtractionModel({
-  name: {
-    query: css("#title"),
-    extractor: extract("innerText")
-  },
-  price: {
-    query: css(".price"),
-    extractor: extract("innerText")
-  },
-  weight: {
-    query: css("[data-spec='weight']"),
-    extractor: extract("innerText")
-  },
-  specsUrl: {
-    query: css("a"),
-    extractor: extract("href")
-  }
+    name: { query: css("#title"), extractor: extract("innerText") },
+    price: { query: css(".price"), extractor: extract("innerText") },
+    inStock: { query: css(".stock"), extractor: extract("innerText") },
+    specsUrl: { query: css("a"), extractor: extract("href") },
 })
 
-// Run the extraction
 const parser = new HtmlParser(html)
 const rawData = await parser.extractModel({ model: extractionModel })
 
 console.log(rawData)
 /*
-Output:
 {
-  name: "  Cool Gadget  ",
-  price: "$99.99",
-  weight: "250g",
-  specsUrl: "/specs.pdf"
+    name: "  Cool Gadget  ",
+    price: "$1,099.99",
+    inStock: "In stock",
+    specsUrl: "/specs.pdf"
 }
 */
 ```
 
 ### 2. Transformation
 
-Now, let's clean up that raw data using `Transformer` and `TransformingModel`.
+Scraped values are messy strings. `xcrap/transformer` gives you field schemas (`t.*`) that solve the common cases and compose with everything Zod offers. `z` is re-exported, so you do not need to install Zod yourself.
 
 ```typescript
-import { Transformer, TransformingModel, transform, StringTransformer, StringValidator } from "xcrap/transformer"
+import { t, z } from "xcrap/transformer"
 
-// Define the transformation model
-const transformerModel = new TransformingModel({
-  name: [
-    transform({
-      key: "name", // Use the 'name' field from rawData
-      transformer: StringTransformer.trim // Trim whitespace
-    })
-  ],
-  price: [
-    transform({
-      key: "price",
-      transformer: (val) => parseFloat(val.replace("$", "")) // Custom cleanup
-    })
-  ],
-  specsUrl: [
-    transform({
-      key: "specsUrl",
-      transformer: StringTransformer.resolveUrl("https://myshop.com") // Resolve relative URL
-    })
-  ]
+const productSchema = z.object({
+    name: t.text(),
+    price: t.price(),
+    inStock: t.boolean({ truthy: ["in stock"], falsy: ["sold out"] }),
+    specsUrl: t.url({ base: "https://myshop.com" }),
 })
 
-// Run the transformation
-const transformer = new Transformer(rawData)
-const cleanData = await transformer.transform(transformerModel)
+type Product = z.infer<typeof productSchema>
 
-console.log(cleanData)
+const product = productSchema.parse(rawData)
+
+console.log(product)
 /*
-Output:
 {
     name: "Cool Gadget",
-    price: 99.99,
-    specsUrl: "https://myshop.com/specs.pdf",
-    weight: "250g",
+    price: 1099.99,
+    inStock: true,
+    specsUrl: "https://myshop.com/specs.pdf"
 }
 */
 ```
+
+### 3. XML (RSS, Atom, sitemaps)
+
+XML extraction is also exported from `xcrap/extractor`. Queries are XPath only.
+
+```typescript
+import { XmlParser, XmlExtractionModel, xml, xpath } from "xcrap/extractor"
+import { t, z } from "xcrap/transformer"
+
+const itemModel = new XmlExtractionModel({
+    title: { query: xpath("//title"), extractor: xml.extractText },
+    url: { query: xpath("//link"), extractor: xml.extractText },
+    publishedAt: { query: xpath("//pubDate"), extractor: xml.extractText },
+})
+
+const parser = new XmlParser(feed)
+const rawItems = await parser.extractModels({ query: xpath("//item"), model: itemModel })
+
+const items = z
+    .array(
+        z.object({
+            title: t.text(),
+            url: t.url({ base: "https://blog.com" }),
+            publishedAt: t.date(),
+        }),
+    )
+    .parse(rawItems)
+```
+
+> [!IMPORTANT]
+> The HTML and XML packages both have extractors named `extractText`, `extractAttribute`, `extractRawText`, `extractTagName`, `extractLocalName`, `extractChildElementCount`, `matchRegexFrom`, `fromNextElementSibling` and `fromPreviousElementSibling`. Imported directly from `xcrap/extractor` they are the **HTML** ones; the XML ones are in the **`xml`** namespace (`xml.extractText`). Everything else from `@xcrap/xml-extractor` (`XmlParser`, `XmlExtractionModel`, `extractInnerXml`, `extractNumber`, …) is available both ways.
 
 ---
 
 ## 📖 Core Concepts
 
-### Extractor (`@xcrap/extractor`)
+### Extractor (`xcrap/extractor`)
 
-The extraction engine allows you to parse structured data from various sources.
+- **`HtmlParser`**, **`JsonParser`**, **`MarkdownParser`**, **`XmlParser`**: parse a source and extract single values, lists or whole models.
+- **`HtmlExtractionModel`**, **`JsonExtractionModel`**, **`MarkdownExtractionModel`**, **`XmlExtractionModel`**: declare the shape of the data you want, with queries (`css`, `xpath`, JMESPath strings) and extractors. Models can be nested inside each other, across formats.
 
-- **`HtmlParser`**: For parsing HTML documents.
-- **`JsonParser`**: For traversing and extracting from JSON objects.
-- **`MarkdownParser`**: For extracting content from Markdown files.
-- **`HtmlExtractionModel`**: Define the structure of the data you want to extract using query selectors (`css`, `xpath`) and extractors (`extract`).
+### Transformer (`xcrap/transformer`)
 
-### Transformer (`@xcrap/transformer`)
+Functions that return plain Zod schemas, used inside a regular `z.object()`:
 
-The transformation engine allows you to process raw data into its final form.
+| Schema | Example |
+| --- | --- |
+| `t.text()` | `" Tom &amp;
+ Jerry "` → `"Tom & Jerry"` |
+| `t.number()` / `t.integer()` | `"1.234,56 un."` → `1234.56` |
+| `t.price()` | `"R$ 1.234,56"` → `1234.56` |
+| `t.percentage()` / `t.rating()` | `"85%"` → `0.85` |
+| `t.boolean()` | `" Sim "` → `true` |
+| `t.url()` | `"../b?x=1"` → `"https://site.com/b?x=1"` |
+| `t.date()` | `"25/12/2024"` → `Date` |
+| `t.match(regex, group)` | `"SKU: AB12"` → `"AB12"` |
+| `t.json(schema?)` | `'{"a":1}'` → `{ a: 1 }` |
 
-- **`Transformer`**: The main class that applies transformations to a dataset.
-- **`TransformingModel`**: Defines a declarative pipeline of transformations for each field.
-- **`StringTransformer`**: A collection of utility functions for common string operations (trim, replace, split, etc.).
-- **`StringValidator`**: A collection of utility functions for validating string content (isNumeric, isEmail, etc.).
+Optional values, defaults, fallbacks and cross-field logic are plain Zod (`.optional()`, `.default()`, `.catch()`, `.transform()`). See the [`@xcrap/transformer` README](https://www.npmjs.com/package/@xcrap/transformer) for every option.
+
+> Coming from `xcrap` 2.x? `Transformer`, `TransformingModel`, `transform()` and the `StringTransformer` / `StringValidator` namespaces no longer exist. Replace each transforming model with a `z.object()` built from the schemas above.
 
 ---
 
