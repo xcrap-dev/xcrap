@@ -41,7 +41,9 @@
   "dependencies": {
     "@xcrap/core": "^0.2.3",
     "@xcrap/extractor": "^0.3.2",
-    "@xcrap/transformer": "^0.3.7"
+    "@xcrap/transformer": "^1.0.0",
+    "@xcrap/xml-extractor": "^0.1.0",
+    "zod": "^4.6.7"
   },
   "repository": {
     "type": "git",
